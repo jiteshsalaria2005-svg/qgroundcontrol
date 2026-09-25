@@ -38,4 +38,27 @@ Item {
         bottomEdgeCenterInset:  parentToolInsets.bottomEdgeCenterInset
         bottomEdgeRightInset:   parentToolInsets.bottomEdgeRightInset
     }
+
+    // Left side panels: Go To Coordinates + Point 1 / TGT
+    Column {
+        id:                 leftPanels
+        anchors.left:       parent.left
+        anchors.top:        parent.top
+        anchors.leftMargin: parentToolInsets.leftEdgeTopInset + ScreenTools.defaultFontPixelWidth
+        anchors.topMargin:  parentToolInsets.topEdgeCenterInset + ScreenTools.defaultFontPixelWidth
+        spacing:            ScreenTools.defaultFontPixelWidth
+
+        // Type coordinates + press GO -> drone flies there
+        GoToCoordinatesPanel {
+            id:         goToPanel
+            mapControl: _root.mapControl
+            visible:    !!QGroundControl.multiVehicleManager.activeVehicle
+        }
+
+        // Point 1 + TGT with box, shown on the map
+        PointsTargetPanel {
+            mapControl: _root.mapControl
+            maxHeight:  _root.height - leftPanels.anchors.topMargin - (goToPanel.visible ? goToPanel.height + leftPanels.spacing : 0) - parentToolInsets.bottomEdgeLeftInset - ScreenTools.defaultFontPixelWidth
+        }
+    }
 }

@@ -38,6 +38,10 @@ qt_add_qml_module(FlyViewModule
         FlyViewTopRightColumnLayout.qml
         FlyViewTopRightPanel.qml
         FlyViewVideo.qml
+        GoToCoordinatesPanel.qml
+        GridConversions.js
+        PointInput.qml
+        PointsTargetPanel.qml
         FlyViewWidgetLayer.qml
         GuidedActionConfirm.qml
         GuidedActionLand.qml

@@ -74,6 +74,12 @@ FlightMap {
     onMapPanStart:  _disableVehicleTracking = true
     onMapPanStop:   panRecenterTimer.restart()
 
+    /// Show the "Go here" marker at coord (used by GoToCoordinatesPanel)
+    function showGotoMarker(coord) {
+        gotoLocationItem.show(coord)
+        gotoLocationItem.actionConfirmed()
+    }
+
     function pointInRect(point, rect) {
         return point.x > rect.x &&
                 point.x < rect.x + rect.width &&
@@ -494,6 +500,78 @@ FlightMap {
                 hide()
             }
         }
+    }
+
+    // Point 1 / TGT visuals (set from PointsTargetPanel)
+    MapPolyline {
+        id:             p1ToTgtLine
+        visible:        false
+        z:              QGroundControl.zOrderMapItems - 1
+        line.width:     2
+        line.color:     "yellow"
+    }
+
+    MapPolygon {
+        id:             tgtBoxPolygon
+        visible:        false
+        z:              QGroundControl.zOrderMapItems - 1
+        color:          Qt.rgba(1, 0, 0, 0.15)
+        border.color:   "red"
+        border.width:   3
+    }
+
+    MapQuickItem {
+        id:             point1Item
+        visible:        false
+        z:              QGroundControl.zOrderMapItems
+        anchorPoint.x:  sourceItem.anchorPointX
+        anchorPoint.y:  sourceItem.anchorPointY
+        sourceItem: MissionItemIndexLabel {
+            checked:    true
+            index:      -1
+            color:      "blue"
+            label:      qsTr("P1")
+        }
+    }
+
+    MapQuickItem {
+        id:             tgtItem
+        visible:        false
+        z:              QGroundControl.zOrderMapItems
+        anchorPoint.x:  sourceItem.anchorPointX
+        anchorPoint.y:  sourceItem.anchorPointY
+        sourceItem: MissionItemIndexLabel {
+            checked:    true
+            index:      -1
+            color:      "red"
+            label:      qsTr("TGT")
+        }
+    }
+
+    /// Show Point 1, TGT and the box (list of 4 corner coordinates) on the map
+    function showPointsAndTarget(p1Coord, tgtCoord, boxCorners) {
+        point1Item.coordinate = p1Coord
+        tgtItem.coordinate = tgtCoord
+        tgtBoxPolygon.path = boxCorners
+        p1ToTgtLine.path = [ p1Coord, tgtCoord ]
+        point1Item.visible = true
+        tgtItem.visible = true
+        tgtBoxPolygon.visible = boxCorners.length > 2
+        p1ToTgtLine.visible = true
+    }
+
+    function clearPointsAndTarget() {
+        point1Item.visible = false
+        tgtItem.visible = false
+        tgtBoxPolygon.visible = false
+        p1ToTgtLine.visible = false
+    }
+
+    /// Move the map so Point 1 and TGT are in view
+    function centerOnPoints(p1Coord, tgtCoord) {
+        _disableVehicleTracking = true
+        center = QtPositioning.coordinate((p1Coord.latitude + tgtCoord.latitude) / 2,
+                                          (p1Coord.longitude + tgtCoord.longitude) / 2)
     }
 
     // Orbit editing visuals
