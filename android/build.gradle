@@ -113,6 +113,8 @@ android {
 
     defaultConfig {
         resConfig "en"
+        // Custom build: different app id so it installs next to the stock / SIYI QGroundControl
+        applicationIdSuffix ".custom"
         minSdkVersion qtMinSdkVersion
         targetSdkVersion qtTargetSdkVersion
         ndk.abiFilters = qtTargetAbiList.split(",")
