@@ -6,11 +6,9 @@ import QGroundControl.Controls
 import QGroundControl.FlyView
 
 RowLayout {
-    TelemetryValuesBar {
+    // Slim see-through strip: battery, voltage, distance, altitude, speeds
+    SlimTelemetryStrip {
         Layout.alignment:       Qt.AlignBottom
-        extraWidth:             instrumentPanel.extraValuesWidth
-        settingsGroup:          factValueGrid.telemetryBarSettingsGroup
-        specificVehicleForCard: null // Tracks active vehicle
     }
 
     FlyViewInstrumentPanel {

@@ -39,9 +39,11 @@ qt_add_qml_module(FlyViewModule
         FlyViewTopRightPanel.qml
         FlyViewVideo.qml
         GoToCoordinatesPanel.qml
+        GuidedActionArmDisarm.qml
         GridConversions.js
         PointInput.qml
         PointsTargetPanel.qml
+        SlimTelemetryStrip.qml
         FlyViewWidgetLayer.qml
         GuidedActionConfirm.qml
         GuidedActionLand.qml

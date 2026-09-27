@@ -14,6 +14,10 @@ ColumnLayout {
     property string title:          ""
     property string settingsPrefix: ""      // used to remember what was typed
     property real   fieldWidth:     ScreenTools.defaultFontPixelWidth * 14
+    property color  labelColor:     _pal.text       // text colour for labels
+    property bool   showTitle:      true
+
+    QGCPalette { id: _pal }
 
     // Format index values
     readonly property int formatLatLon:     0
@@ -80,6 +84,8 @@ ColumnLayout {
         QGCLabel {
             text:               root.title
             font.bold:          true
+            color:              root.labelColor
+            visible:            root.showTitle
             Layout.fillWidth:   true
         }
         QGCComboBox {
@@ -95,6 +101,7 @@ ColumnLayout {
 
         QGCLabel {
             text:               qsTr("Zone (Kalianpur 1975)")
+            color:              root.labelColor
             Layout.fillWidth:   true
         }
         QGCComboBox {
@@ -111,6 +118,7 @@ ColumnLayout {
 
         QGCLabel {
             text:               root._format === root.formatLatLon ? qsTr("Latitude") : qsTr("Easting (m)")
+            color:              root.labelColor
             Layout.fillWidth:   true
         }
         QGCTextField {
@@ -122,6 +130,7 @@ ColumnLayout {
 
         QGCLabel {
             text:               root._format === root.formatLatLon ? qsTr("Longitude") : qsTr("Northing (m)")
+            color:              root.labelColor
             Layout.fillWidth:   true
         }
         QGCTextField {

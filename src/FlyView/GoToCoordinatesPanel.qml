@@ -6,39 +6,65 @@ import QGroundControl
 import QGroundControl.Controls
 import QGroundControl.FlyView
 
-/// Small panel on the Fly screen:
-/// type Latitude + Longitude, press GO, the vehicle flies there in Guided mode
-/// (keeps its current altitude). Works with ArduPilot and PX4.
-Rectangle {
-    id:         root
-    width:      mainLayout.implicitWidth  + _margin * 2
-    height:     mainLayout.implicitHeight + _margin * 2
-    color:      qgcPal.toolbarBackground
-    radius:     ScreenTools.defaultFontPixelHeight / 2
+import "GridConversions.js" as Grid
 
-    property var mapControl     // FlyViewMap, used to show the "Go here" marker
+/// Fly screen: small "GO TO" button. Tap it to open a panel where a point is entered as
+/// Lat/Long, Everest grid or Custom grid. GO sends the vehicle there in Guided mode
+/// (keeps its current altitude).
+Item {
+    id:             root
+    implicitWidth:  _expanded ? panel.width : chip.width
+    implicitHeight: _expanded ? panel.height : chip.height
+    width:          implicitWidth
+    height:         implicitHeight
+
+    property var    mapControl                  // FlyViewMap, used to show the "Go here" marker
+    property real   maxHeight:  ScreenTools.defaultFontPixelHeight * 25
 
     property var    _activeVehicle:     QGroundControl.multiVehicleManager.activeVehicle
     property var    _guidedController:  globals.guidedControllerFlyView
     property bool   _canGo:             _guidedController ? _guidedController.showGotoLocation : false
-    property bool   _expanded:          true
+    property bool   _expanded:          false
+    property bool   _showCustom:        false
     property real   _margin:            ScreenTools.defaultFontPixelHeight / 2
-    property real   _fieldWidth:        ScreenTools.defaultFontPixelWidth * 16
+    property real   _fieldWidth:        ScreenTools.defaultFontPixelWidth * 14
     property string _status:            ""
     property bool   _statusIsError:     false
 
-    QGCPalette { id: qgcPal }
+    readonly property color _bgColor:       Qt.rgba(0.05, 0.07, 0.1, 0.85)
+    readonly property color _textColor:     "white"
+    readonly property color _accentColor:   "#FFD54F"     // amber, readable on map and satellite
+    readonly property color _errorColor:    "#FF8A80"
 
-    // Stop map clicks/drags from going through the panel
-    DeadMouseArea { anchors.fill: parent }
+    function _key(name) { return "PointsTarget_" + name }   // shared with the Point 1 / TGT panel
 
-    // Accepts "31.123456" or pasted "31.123456, 75.123456" in the latitude box
-    function _splitPastedPair() {
-        var parts = latField.text.split(/[\s,;]+/).filter(function(s) { return s.length > 0 })
-        if (parts.length === 2) {
-            latField.text = parts[0]
-            lonField.text = parts[1]
+    function _customParams() {
+        return {
+            lat0:   Grid.parseNum(originLatField.text),
+            lon0:   Grid.parseNum(originLonField.text),
+            sp1:    Grid.parseNum(sp1Field.text),
+            sp2:    Grid.parseNum(sp2Field.text),
+            FE:     Grid.parseNum(feField.text),
+            FN:     Grid.parseNum(fnField.text)
         }
+    }
+
+    function _saveCustom() {
+        QGroundControl.saveGlobalSetting(_key("originLat"), originLatField.text)
+        QGroundControl.saveGlobalSetting(_key("originLon"), originLonField.text)
+        QGroundControl.saveGlobalSetting(_key("sp1"),       sp1Field.text)
+        QGroundControl.saveGlobalSetting(_key("sp2"),       sp2Field.text)
+        QGroundControl.saveGlobalSetting(_key("fe"),        feField.text)
+        QGroundControl.saveGlobalSetting(_key("fn"),        fnField.text)
+    }
+
+    function _loadCustom() {
+        originLatField.text = QGroundControl.loadGlobalSetting(_key("originLat"), "")
+        originLonField.text = QGroundControl.loadGlobalSetting(_key("originLon"), "")
+        sp1Field.text       = QGroundControl.loadGlobalSetting(_key("sp1"), "")
+        sp2Field.text       = QGroundControl.loadGlobalSetting(_key("sp2"), "")
+        feField.text        = QGroundControl.loadGlobalSetting(_key("fe"), "")
+        fnField.text        = QGroundControl.loadGlobalSetting(_key("fn"), "")
     }
 
     function _setStatus(text, isError) {
@@ -47,17 +73,12 @@ Rectangle {
     }
 
     function _go() {
-        _splitPastedPair()
+        pointInput.saveInputs()
+        _saveCustom()
 
-        var lat = Number(latField.text.trim())
-        var lon = Number(lonField.text.trim())
-
-        if (latField.text.trim() === "" || isNaN(lat) || lat < -90 || lat > 90) {
-            _setStatus(qsTr("Latitude must be between -90 and 90"), true)
-            return
-        }
-        if (lonField.text.trim() === "" || isNaN(lon) || lon < -180 || lon > 180) {
-            _setStatus(qsTr("Longitude must be between -180 and 180"), true)
+        var r = pointInput.resolve(_customParams())
+        if (!r.ok) {
+            _setStatus(r.error, true)
             return
         }
         if (!_activeVehicle) {
@@ -69,101 +90,181 @@ Rectangle {
             return
         }
 
-        var coord = QtPositioning.coordinate(lat, lon)
+        var coord = QtPositioning.coordinate(r.lat, r.lon)
         if (_guidedController.executeAction(_guidedController.actionGoto, coord)) {
             if (mapControl) {
                 mapControl.showGotoMarker(coord)
             }
             var dist = _activeVehicle.coordinate.isValid ? Math.round(_activeVehicle.coordinate.distanceTo(coord)) : -1
-            _setStatus(dist >= 0 ? qsTr("Going to point (%1 m away)").arg(dist) : qsTr("Going to point"), false)
+            _setStatus((dist >= 0 ? qsTr("Going: %1 m away").arg(dist) : qsTr("Going to point")) +
+                       "\n" + r.lat.toFixed(6) + ", " + r.lon.toFixed(6), false)
         } else {
             // Vehicle code already shows the reason (e.g. too far) as an app message
             _setStatus(qsTr("Drone did not accept the command"), true)
         }
     }
 
-    ColumnLayout {
-        id:                 mainLayout
-        anchors.margins:    _margin
-        anchors.top:        parent.top
-        anchors.left:       parent.left
-        spacing:            ScreenTools.defaultFontPixelHeight / 3
+    Component.onCompleted: _loadCustom()
 
-        // Header: tap to show/hide the panel
+    // ---- Collapsed: small chip ----
+    Rectangle {
+        id:             chip
+        visible:        !_expanded
+        width:          chipLabel.implicitWidth + _margin * 2
+        height:         ScreenTools.defaultFontPixelHeight * 1.8
+        radius:         height / 2
+        color:          _bgColor
+        border.color:   _accentColor
+        border.width:   1
+
+        QGCLabel {
+            id:                 chipLabel
+            anchors.centerIn:   parent
+            text:               qsTr("GO TO")
+            color:              _accentColor
+            font.bold:          true
+        }
+
+        QGCMouseArea {
+            anchors.fill:   parent
+            onClicked:      _expanded = true
+        }
+    }
+
+    // ---- Expanded panel ----
+    Rectangle {
+        id:             panel
+        visible:        _expanded
+        width:          mainLayout.implicitWidth + _margin * 2
+        height:         Math.min(root.maxHeight, headerRow.height + flick.contentHeight + _margin * 3)
+        radius:         _margin
+        color:          _bgColor
+        border.color:   _accentColor
+        border.width:   1
+        clip:           true
+
+        DeadMouseArea { anchors.fill: parent }
+
         RowLayout {
-            spacing: ScreenTools.defaultFontPixelWidth
+            id:                 headerRow
+            anchors.top:        parent.top
+            anchors.left:       parent.left
+            anchors.right:      parent.right
+            anchors.margins:    _margin
 
             QGCLabel {
-                text:               qsTr("Go To Coordinates")
+                text:               qsTr("GO TO")
+                color:              _accentColor
                 font.bold:          true
                 Layout.fillWidth:   true
             }
             QGCLabel {
-                text: _expanded ? "▲" : "▼"
+                text:       "✕"
+                color:      _textColor
+                font.bold:  true
             }
         }
-
-        GridLayout {
-            columns:        2
-            rowSpacing:     ScreenTools.defaultFontPixelHeight / 4
-            columnSpacing:  ScreenTools.defaultFontPixelWidth
-            visible:        _expanded
-
-            QGCLabel { text: qsTr("Latitude") }
-            QGCTextField {
-                id:                     latField
-                Layout.preferredWidth:  _fieldWidth
-                placeholderText:        qsTr("e.g. 31.326015")
-                numericValuesOnly:      true
-                onEditingFinished:      _splitPastedPair()
-                onTextEdited:           _status = ""
-            }
-
-            QGCLabel { text: qsTr("Longitude") }
-            QGCTextField {
-                id:                     lonField
-                Layout.preferredWidth:  _fieldWidth
-                placeholderText:        qsTr("e.g. 75.576180")
-                numericValuesOnly:      true
-                onTextEdited:           _status = ""
-            }
+        QGCMouseArea {
+            anchors.fill:   headerRow
+            onClicked:      _expanded = false
         }
 
-        QGCButton {
-            Layout.fillWidth:   true
-            text:               qsTr("GO")
-            primary:            true
-            enabled:            _canGo
-            visible:            _expanded
-            onClicked:          _go()
-        }
+        QGCFlickable {
+            id:                     flick
+            anchors.top:            headerRow.bottom
+            anchors.topMargin:      _margin / 2
+            anchors.left:           parent.left
+            anchors.right:          parent.right
+            anchors.bottom:         parent.bottom
+            anchors.leftMargin:     _margin
+            anchors.rightMargin:    _margin
+            anchors.bottomMargin:   _margin
+            contentHeight:          mainLayout.implicitHeight
+            contentWidth:           width
 
-        QGCLabel {
-            Layout.fillWidth:       true
-            Layout.maximumWidth:    _fieldWidth + ScreenTools.defaultFontPixelWidth * 10
-            wrapMode:               Text.WordWrap
-            font.pointSize:         ScreenTools.smallFontPointSize
-            visible:                _expanded
-            color:                  _statusIsError ? qgcPal.warningText : qgcPal.text
-            text: {
-                if (_status !== "") {
-                    return _status
+            ColumnLayout {
+                id:         mainLayout
+                width:      flick.width
+                spacing:    ScreenTools.defaultFontPixelHeight / 3
+
+                PointInput {
+                    id:                 pointInput
+                    Layout.fillWidth:   true
+                    title:              qsTr("Point")
+                    settingsPrefix:     "goto"
+                    fieldWidth:         _fieldWidth
+                    labelColor:         _textColor
                 }
-                if (!_activeVehicle) {
-                    return qsTr("Connect a drone")
+
+                // Custom grid settings (shared with Point 1 / TGT panel)
+                Item {
+                    Layout.fillWidth:   true
+                    implicitHeight:     customHeader.implicitHeight
+                    visible:            pointInput._format === pointInput.formatCustom
+
+                    RowLayout {
+                        id:             customHeader
+                        anchors.left:   parent.left
+                        anchors.right:  parent.right
+                        QGCLabel {
+                            text:               qsTr("Custom Grid settings")
+                            color:              _accentColor
+                            Layout.fillWidth:   true
+                        }
+                        QGCLabel { text: _showCustom ? "▲" : "▼"; color: _accentColor }
+                    }
+                    QGCMouseArea {
+                        anchors.fill:   parent
+                        onClicked:      _showCustom = !_showCustom
+                    }
                 }
-                return _canGo ? qsTr("Ready. Drone keeps its current height.")
-                              : qsTr("Take off first, then press GO")
+
+                GridLayout {
+                    columns:        2
+                    columnSpacing:  ScreenTools.defaultFontPixelWidth
+                    rowSpacing:     ScreenTools.defaultFontPixelHeight / 4
+                    visible:        _showCustom && pointInput._format === pointInput.formatCustom
+
+                    QGCLabel { text: qsTr("Origin lat (°)");    color: _textColor; Layout.fillWidth: true }
+                    QGCTextField { id: originLatField; Layout.preferredWidth: _fieldWidth; numericValuesOnly: true }
+                    QGCLabel { text: qsTr("Origin long (°)");   color: _textColor; Layout.fillWidth: true }
+                    QGCTextField { id: originLonField; Layout.preferredWidth: _fieldWidth; numericValuesOnly: true }
+                    QGCLabel { text: qsTr("Std parallel 1 (°)"); color: _textColor; Layout.fillWidth: true }
+                    QGCTextField { id: sp1Field; Layout.preferredWidth: _fieldWidth; numericValuesOnly: true }
+                    QGCLabel { text: qsTr("Std parallel 2 (°)"); color: _textColor; Layout.fillWidth: true }
+                    QGCTextField { id: sp2Field; Layout.preferredWidth: _fieldWidth; numericValuesOnly: true }
+                    QGCLabel { text: qsTr("False Easting (m)");  color: _textColor; Layout.fillWidth: true }
+                    QGCTextField { id: feField; Layout.preferredWidth: _fieldWidth; numericValuesOnly: true }
+                    QGCLabel { text: qsTr("False Northing (m)"); color: _textColor; Layout.fillWidth: true }
+                    QGCTextField { id: fnField; Layout.preferredWidth: _fieldWidth; numericValuesOnly: true }
+                }
+
+                QGCButton {
+                    Layout.fillWidth:   true
+                    text:               qsTr("GO")
+                    primary:            true
+                    enabled:            _canGo
+                    onClicked:          _go()
+                }
+
+                QGCLabel {
+                    Layout.fillWidth:       true
+                    Layout.maximumWidth:    _fieldWidth * 2
+                    wrapMode:               Text.WordWrap
+                    font.pointSize:         ScreenTools.smallFontPointSize
+                    color:                  _status !== "" ? (_statusIsError ? _errorColor : _accentColor) : _textColor
+                    text: {
+                        if (_status !== "") {
+                            return _status
+                        }
+                        if (!_activeVehicle) {
+                            return qsTr("Connect a drone")
+                        }
+                        return _canGo ? qsTr("Ready. Keeps current height.")
+                                      : qsTr("Take off first, then press GO")
+                    }
+                }
             }
         }
-    }
-
-    // Tap on the header row toggles the panel
-    MouseArea {
-        x:          0
-        y:          0
-        width:      root.width
-        height:     _margin + ScreenTools.defaultFontPixelHeight * 1.2
-        onClicked:  _expanded = !_expanded
     }
 }

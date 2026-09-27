@@ -52,7 +52,7 @@ Item {
         GoToCoordinatesPanel {
             id:         goToPanel
             mapControl: _root.mapControl
-            visible:    !!QGroundControl.multiVehicleManager.activeVehicle
+            maxHeight:  _root.height - leftPanels.anchors.topMargin - parentToolInsets.bottomEdgeLeftInset - ScreenTools.defaultFontPixelWidth
         }
 
         // Point 1 + TGT with box, shown on the map
