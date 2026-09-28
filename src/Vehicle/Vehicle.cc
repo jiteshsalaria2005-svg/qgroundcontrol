@@ -3385,6 +3385,56 @@ void Vehicle::motorInterlock(bool enable)
     }
 }
 
+void Vehicle::triggerMountPoi(bool lockRoi)
+{
+    if (!apmFirmware()) {
+        return;
+    }
+    if (isMavCommandPending(defaultComponentId(), MAV_CMD_DO_AUX_FUNCTION)) {
+        QGC::showAppMessage(tr("Waiting on previous POI request."));
+        return;
+    }
+
+    // mount-poi.lua listens on Scripting1 (mark POI) and Scripting2 (mark POI and lock gimbal)
+    _mountPoiAuxFunction = lockRoi ? APM::AUX_FUNC::SCRIPTING_2 : APM::AUX_FUNC::SCRIPTING_1;
+
+    const MavCmdAckHandlerInfo_t handlerInfo = {&Vehicle::_mountPoiAuxHighAckHandler, this, nullptr, nullptr};
+    sendMavCommandWithHandler(
+        &handlerInfo,
+        defaultComponentId(),
+        MAV_CMD_DO_AUX_FUNCTION,
+        _mountPoiAuxFunction,
+        MAV_CMD_DO_AUX_FUNCTION_SWITCH_LEVEL_HIGH);
+}
+
+void Vehicle::_mountPoiAuxHighAckHandler(void* resultHandlerData, int compId, const mavlink_command_ack_t& ack, MavCmdResultFailureCode_t failureCode)
+{
+    Q_UNUSED(compId);
+
+    auto* vehicle = static_cast<Vehicle*>(resultHandlerData);
+
+    if (failureCode == MavCmdResultFailureNoResponseToCommand) {
+        QGC::showAppMessage(tr("No response to POI request."));
+        return;
+    }
+    if (failureCode != MavCmdResultCommandResultOnly || ack.result != MAV_RESULT_ACCEPTED) {
+        vehicle->showCommandAckError(ack);
+        return;
+    }
+
+    // The script only reacts to a low-to-high switch change, so return the switch to low for the next request.
+    // The delay gives the script (10Hz loop) time to see the high position first.
+    static constexpr int kSwitchReleaseDelayMs = 500;
+    QTimer::singleShot(kSwitchReleaseDelayMs, vehicle, [vehicle]() {
+        vehicle->sendMavCommand(
+            vehicle->defaultComponentId(),
+            MAV_CMD_DO_AUX_FUNCTION,
+            false,
+            vehicle->_mountPoiAuxFunction,
+            MAV_CMD_DO_AUX_FUNCTION_SWITCH_LEVEL_LOW);
+    });
+}
+
 /*---------------------------------------------------------------------------*/
 /*===========================================================================*/
 /*                         Status Text Handler                               */

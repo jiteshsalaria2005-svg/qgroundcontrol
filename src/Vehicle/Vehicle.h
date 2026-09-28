@@ -1151,6 +1151,15 @@ public:
     /// Command vehicle to Enable/Disable Motor Interlock
     Q_INVOKABLE void motorInterlock(bool enable);
 
+    /// Trigger the ArduPilot mount-poi.lua script to find the point the gimbal is looking at
+    ///     @param lockRoi true: also lock the gimbal onto that point
+    Q_INVOKABLE void triggerMountPoi(bool lockRoi);
+
+private:
+    static void _mountPoiAuxHighAckHandler(void* resultHandlerData, int compId, const mavlink_command_ack_t& ack, MavCmdResultFailureCode_t failureCode);
+
+    int _mountPoiAuxFunction = 0;
+
 /*---------------------------------------------------------------------------*/
 /*===========================================================================*/
 /*                         CONTROL STATUS HANDLER                            */
